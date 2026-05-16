@@ -1,0 +1,93 @@
+version: '3.9'
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    environment:
+      POSTGRES_DB: nexusone
+      POSTGRES_USER: nexus
+      POSTGRES_PASSWORD: nexus
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  web:
+    build: ../apps/web
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-gateway
+
+  api-gateway:
+    build: ../apps/api-gateway
+    environment:
+      PORT: 4000
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: nexusone
+      POSTGRES_USER: nexus
+      POSTGRES_PASSWORD: nexus
+      JWT_ACCESS_SECRET: dev_access_secret
+      JWT_REFRESH_SECRET: dev_refresh_secret
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "4000:4000"
+    depends_on:
+      - comm-service
+      - hrm-service
+      - crm-service
+
+  comm-service:
+    build: ../apps/comm-service
+    environment:
+      DJANGO_SETTINGS_MODULE: app.settings
+      JWT_ACCESS_SECRET: dev_access_secret
+    ports:
+      - "8001:8001"
+    depends_on:
+      - postgres
+      - redis
+
+  hrm-service:
+    build: ../apps/hrm-service
+    environment:
+      DJANGO_SETTINGS_MODULE: app.settings
+      JWT_ACCESS_SECRET: dev_access_secret
+    ports:
+      - "8002:8002"
+    depends_on:
+      - postgres
+      - redis
+
+  crm-service:
+    build: ../apps/crm-service
+    environment:
+      PORT: 8003
+      JWT_ACCESS_SECRET: dev_access_secret
+    ports:
+      - "8003:8003"
+    depends_on:
+      - postgres
+      - redis
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - web
+      - api-gateway
+      - comm-service
+      - hrm-service
+      - crm-service
+
+volumes:
+  pg_data:
