@@ -1,0 +1,51 @@
+version: '3.9'
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    restart: unless-stopped
+    env_file: ../.env
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./postgres/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes: [redis_data:/data]
+  api-gateway:
+    build: ../apps/api-gateway
+    restart: unless-stopped
+    env_file: ../.env
+    depends_on: [postgres, redis]
+  comm-service:
+    build: ../apps/comm-service
+    restart: unless-stopped
+    env_file: ../.env
+    depends_on: [postgres, redis]
+  hrm-service:
+    build: ../apps/hrm-service
+    restart: unless-stopped
+    env_file: ../.env
+    depends_on: [postgres, redis]
+  crm-service:
+    build: ../apps/crm-service
+    restart: unless-stopped
+    env_file: ../.env
+    depends_on: [postgres, redis]
+  web:
+    build: ../apps/web
+    restart: unless-stopped
+    env_file: ../.env
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports: ["80:80","443:443"]
+    volumes:
+      - ./nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
+    depends_on: [web, api-gateway]
+volumes:
+  pg_data:
+  redis_data:
